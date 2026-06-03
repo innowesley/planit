@@ -18,6 +18,7 @@ OPCODE_CONFIG_DIR="$HOME/.config/opencode"
 KILO_CONFIG_DIR="$HOME/.config/kilo"
 KILO_PLUGIN_DIR="$KILO_CONFIG_DIR/node_modules/@opencode-tools/kilo-plugin"
 OPCODE_MANIFEST="$OPCODE_CONFIG_DIR/.plan-it-manifest"
+OPCODE_USER_PREFERENCES="$OPCODE_CONFIG_DIR/user-preferences.md"
 KILO_MANIFEST="$KILO_CONFIG_DIR/.plan-it-manifest"
 
 # ---------------------------------------------------------------------------
@@ -33,8 +34,72 @@ install_opencode() {
   mkdir -p "$OPCODE_CONFIG_DIR/tools" "$OPCODE_CONFIG_DIR/commands" \
     "$HOME/.agents/plans/pending" "$HOME/.agents/plans/completed"
 
-  local prompt_block
-  prompt_block=$(cat << 'PROMPT_BLOCK'
+  # Create default user preferences if absent
+  if [ ! -f "$OPCODE_USER_PREFERENCES" ]; then
+    cat > "$OPCODE_USER_PREFERENCES" << 'PREFERENCES'
+# User Engineering Preferences
+
+## Engineering Values
+- Build real systems, not tutorials or toy projects
+- Prefer modern, stable, industry-standard technologies and patterns
+- Prioritize security, performance, scalability, maintainability, SEO,
+  accessibility, and reliability — in that order of priority
+- Optimize for real-world value; avoid premature optimization
+- Prefer the simplest solution that meets current requirements
+  while allowing reasonable future growth
+- Use current best practices and the latest stable versions
+- Optimize for maintainability, developer productivity, and business value —
+  not just technical elegance
+
+## Decision-Making
+- Favor convention over custom solutions unless clear advantage
+- Challenge assumptions; point out hidden risks and edge cases
+- If something is over-engineered, say so explicitly and recommend
+  a simpler alternative
+- For infrastructure/deployment: prefer automation, reproducibility,
+  observability, and operational simplicity
+- Break implementation plans into clear, actionable phases
+
+## Review & Communication
+- When reviewing code/architecture: identify bottlenecks, security risks,
+  technical debt, and optimization opportunities
+- Explain trade-offs, costs, and benefits of each approach
+- Give production-ready answers — not toy examples or stubs
+- Keep responses short but complete; clear and structured
+- Give enough detail to be immediately usable
+- Expand only when asked; offer to go deeper if relevant
+- For code reviews: act as a senior engineer, be thorough
+PREFERENCES
+    info "  Created default preferences: $OPCODE_USER_PREFERENCES"
+    info "  Edit this file and re-run 'plan-it install opencode' to update the plan prompt"
+  fi
+
+  merge_json_config "$OPCODE_CONFIG_DIR/opencode.json" '{
+    "$schema": "https://opencode.ai/config.json",
+    "agent": {
+      "plan": {
+        "permission": {
+          "write": {
+            ".opencode/plans/**/*.md": "allow",
+            ".agents/plans/**/*.md": "allow"
+          }
+        },
+        "prompt": ""
+      }
+    }
+  }'
+
+  # Read user preferences for inlining into prompt
+  local preferences_content=""
+  if [ -f "$OPCODE_USER_PREFERENCES" ]; then
+    preferences_content=$(cat "$OPCODE_USER_PREFERENCES")
+  fi
+
+  local tmp_prompt
+  tmp_prompt="$(mktemp "/tmp/prompt-merge.XXXX")"
+
+  # Write static part — quoted heredoc preserves backticks safely
+  cat > "$tmp_prompt" << 'PROMPT_STATIC'
 <!-- BEGIN PLAN-IT PROMPT -->
 You are in Plan mode. Follow the Plan-First Protocol in AGENTS.md.
 
@@ -55,28 +120,23 @@ Planning workflow:
    - Analyze rollback safety if deployment fails.
 4. Every plan must contain sections: Existing Logic Analysis, Potential Conflicts, Backward Compatibility, Migration/Rollout Strategy, Risk Assessment, Regression Prevention, Testing Strategy.
 5. When conflicts exist: prefer minimally invasive solutions, incremental refactors, preserve stable interfaces, add compatibility layers if needed, avoid changing core foundations without clear justification.
-<!-- END PLAN-IT PROMPT -->
-PROMPT_BLOCK
-)
 
-  merge_json_config "$OPCODE_CONFIG_DIR/opencode.json" '{
-    "$schema": "https://opencode.ai/config.json",
-    "agent": {
-      "plan": {
-        "permission": {
-          "write": {
-            ".opencode/plans/**/*.md": "allow",
-            ".agents/plans/**/*.md": "allow"
-          }
-        },
-        "prompt": ""
-      }
-    }
-  }'
+## User Engineering Preferences
 
-  local tmp_prompt
-  tmp_prompt="$(mktemp "/tmp/prompt-merge.XXXX")"
-  printf '%s' "$prompt_block" > "$tmp_prompt"
+The following preferences MUST guide your planning and analysis.
+Incorporate them into every plan — reference them explicitly when evaluating
+trade-offs, choosing approaches, and structuring deliverables.
+
+PROMPT_STATIC
+
+  # Append dynamic preferences content (safe via here-string — no shell expansion)
+  if [ -n "$preferences_content" ]; then
+    cat >> "$tmp_prompt" <<< "$preferences_content"
+  fi
+
+  # Append closing marker
+  echo "" >> "$tmp_prompt"
+  echo "<!-- END PLAN-IT PROMPT -->" >> "$tmp_prompt"
 
   node -e "
     const fs = require('fs');
@@ -96,6 +156,7 @@ PROMPT_BLOCK
   rm -f "$tmp_prompt"
 
   manifest_add "$OPCODE_MANIFEST" "$OPCODE_CONFIG_DIR/opencode.json" "managed"
+  manifest_add "$OPCODE_MANIFEST" "$OPCODE_USER_PREFERENCES" "user"
 
   local agents_block
   agents_block=$(cat << 'AGENTS_BLOCK'

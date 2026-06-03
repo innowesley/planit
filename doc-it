@@ -547,7 +547,9 @@ async function scanDirForPatterns(dir, violations, patterns) {
         }
       }
     }
-  } catch { console.warn("doc-it: error scanning " + dir + " for forbidden patterns") }
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn("doc-it: error scanning " + dir + " for forbidden patterns")
+  }
 }
 
 async function scanDirForRoutes(dir, apiDoc, violations) {
@@ -569,7 +571,9 @@ async function scanDirForRoutes(dir, apiDoc, violations) {
         }
       }
     }
-  } catch { console.warn("doc-it: error scanning " + dir + " for routes") }
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn("doc-it: error scanning " + dir + " for routes")
+  }
 }
 
 export async function checkDocDrift(args, base) {
@@ -977,7 +981,9 @@ async function scanDirForPatterns(dir, violations, patterns) {
         }
       }
     }
-  } catch { console.warn("doc-it: error scanning " + dir + " for forbidden patterns") }
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn("doc-it: error scanning " + dir + " for forbidden patterns")
+  }
 }
 
 async function scanDirForRoutes(dir, apiDoc, violations) {
@@ -999,7 +1005,9 @@ async function scanDirForRoutes(dir, apiDoc, violations) {
         }
       }
     }
-  } catch { console.warn("doc-it: error scanning " + dir + " for routes") }
+  } catch (err) {
+    if (err.code !== 'ENOENT') console.warn("doc-it: error scanning " + dir + " for routes")
+  }
 }
 
 export async function checkDocDrift(args, base) {
